@@ -11,3 +11,4 @@ chrome.runtime.onMessage.addListener((msg, _s, reply) => {
   ready().then((w) => w.recognize(msg.img)).then((r) => reply({ text: r.data.text }), (e) => reply({ error: String(e) }));
   return true; // async reply
 });
+ready(); // load the model as soon as the offscreen document is created

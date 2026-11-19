@@ -115,8 +115,9 @@ function scan() {
 
 // --- OCR test (Chrome/Edge): read on-video text from frames of previews you actually watch ---
 // Frames go to a local Tesseract worker (offscreen doc); nothing is sent to Facebook or anywhere else.
-const ocrTimers = new WeakMap();
-const OCR_AFTER_MS = 1500, OCR_EVERY_MS = 2000, OCR_MAX = 3;
+const OCR_AFTER_MS = 500, OCR_EVERY_MS = 1500, OCR_MAX = 3, TICK = 250;
+let warmed; // first playing video wakes the OCR worker, so the model is loaded before the 0.5 s are up
+const watch = new WeakMap(); // video -> {src, t, ms (continuous visible playtime), last (last OCR), n (OCR count)}
 let ocrQueue = Promise.resolve();
 function grabFrame(v) {
   const k = Math.min(1, 640 / v.videoWidth);
@@ -126,32 +127,44 @@ function grabFrame(v) {
   c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
   return c.toDataURL("image/jpeg", 0.8); // throws if the video is cross-origin (tainted canvas)
 }
-function ocrVideo(v, n = 0) {
-  const why = v.paused ? "paused" : !v.isConnected ? "detached" : v.closest(SKIP) ? "skip" : !v.videoWidth ? "no videoWidth" : document.hidden ? "tab hidden" : "";
-  if (why) return console.log("[GTA OCR] skipped:", why);
+// OCR often reads the "6" in "GTA6" as G / B / 8 ("GTAG", "GTAGB"), so OCR text gets a looser match
+const OCR_RE = new RegExp(RE.source + "|\\bGTA\\s?[6GB8]{1,2}\\b", "i");
+function ocrVideo(v) {
   ocrQueue = ocrQueue.then(async () => {
     try {
+      if (!v.isConnected || !v.videoWidth) return console.log("[GTA OCR] skipped: no frame");
+      const img = grabFrame(v);
       await chrome.runtime.sendMessage({ type: "gta-ocr-ensure" });
-      const r = await chrome.runtime.sendMessage({ type: "gta-ocr", img: grabFrame(v) });
-      console.log("[GTA OCR]", r?.error || r?.text?.trim());
-      if (r?.text && RE.test(r.text)) {
+      const r = await chrome.runtime.sendMessage({ type: "gta-ocr", img });
+      console.log("[GTA OCR]", r?.error || JSON.stringify(r?.text?.trim()));
+      if (r?.text && OCR_RE.test(r.text)) {
         const c = containerFor(v);
         if (c && !c.dataset.gtaHidden) { block(c); v.pause(); }
-        return;
       }
-    } catch (e) { console.log("[GTA OCR] error", String(e)); return; }
-    if (n + 1 < OCR_MAX) ocrTimers.set(v, setTimeout(() => { ocrTimers.delete(v); ocrVideo(v, n + 1); }, OCR_EVERY_MS));
+    } catch (e) { console.log("[GTA OCR] error", String(e)); }
   });
 }
-console.log("[GTA OCR] content script loaded");
-document.addEventListener("playing", (e) => {
-  const v = e.target;
-  if (v.tagName !== "VIDEO" || ocrTimers.has(v)) return;
-  console.log("[GTA OCR] video playing, waiting", OCR_AFTER_MS, "ms");
-  ocrTimers.set(v, setTimeout(() => { ocrTimers.delete(v); ocrVideo(v); }, OCR_AFTER_MS));
-}, true);
-["pause", "emptied", "ended"].forEach((ev) =>
-  document.addEventListener(ev, (e) => { clearTimeout(ocrTimers.get(e.target)); ocrTimers.delete(e.target); }, true));
+console.log("[GTA OCR] content script loaded (polling v3)");
+// Polling instead of play/pause events: Facebook's player fires them constantly and cancelled the timers
+setInterval(() => {
+  if (document.hidden) return;
+  document.querySelectorAll("video").forEach((v) => {
+    let s = watch.get(v);
+    if (!s) watch.set(v, (s = { src: v.currentSrc, t: v.currentTime, ms: 0, last: 0, n: 0 }));
+    if (v.currentSrc !== s.src) Object.assign(s, { src: v.currentSrc, ms: 0, n: 0 }); // element reused for the next reel
+    const moving = !v.paused && v.currentTime !== s.t;
+    s.t = v.currentTime;
+    if (moving && !warmed) { warmed = 1; chrome.runtime.sendMessage({ type: "gta-ocr-ensure" }).catch(() => {}); }
+    const r = v.getBoundingClientRect();
+    const visible = r.width >= 100 && r.height >= 100 && r.bottom > 0 && r.top < innerHeight;
+    s.ms = moving && visible ? s.ms + TICK : 0;
+    if (s.ms >= OCR_AFTER_MS && s.n < OCR_MAX && Date.now() - s.last >= OCR_EVERY_MS && !v.closest(SKIP)) {
+      s.n++;
+      s.last = Date.now();
+      ocrVideo(v);
+    }
+  });
+}, TICK);
 
 // Pages that load content dynamically (YouTube, X, Facebook...)
 let timer;
