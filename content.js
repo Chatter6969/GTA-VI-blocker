@@ -91,10 +91,64 @@ function scan() {
     const c = containerFor(el);
     if (c) hits.add(c);
   });
+  // Reel previews show no description. Remember reels flagged on their own page (no network),
+  // then hide every preview linking to them.
+  let known = [];
+  try { known = JSON.parse(localStorage.getItem("gtaReels") || "[]"); } catch {}
+  const m = location.pathname.match(/\/reel\/(\d+)/);
+  if (m && hits.size && !known.includes(m[1])) {
+    known.push(m[1]);
+    try { localStorage.setItem("gtaReels", JSON.stringify(known.slice(-500))); } catch {}
+  }
+  if (known.length) {
+    document.querySelectorAll("a[href*='/reel/']:not([href*='/hashtag/'])").forEach((a) => {
+      if (known.includes((a.href.match(/\/reel\/(\d+)/) || [])[1]) && !a.closest(SKIP)) hits.add(a);
+    });
+  }
   hits.forEach((c) => { if (!c.dataset.gtaHidden) block(c); });
   // display:none doesn't stop audio
   document.querySelectorAll("[data-gta-hidden] video").forEach((v) => v.pause());
 }
+
+// --- OCR test (Chrome/Edge): read on-video text from frames of previews you actually watch ---
+// Frames go to a local Tesseract worker (offscreen doc); nothing is sent to Facebook or anywhere else.
+const ocrTimers = new WeakMap();
+const OCR_AFTER_MS = 1500, OCR_EVERY_MS = 2000, OCR_MAX = 3;
+let ocrQueue = Promise.resolve();
+function grabFrame(v) {
+  const k = Math.min(1, 640 / v.videoWidth);
+  const c = document.createElement("canvas");
+  c.width = v.videoWidth * k;
+  c.height = v.videoHeight * k;
+  c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
+  return c.toDataURL("image/jpeg", 0.8); // throws if the video is cross-origin (tainted canvas)
+}
+function ocrVideo(v, n = 0) {
+  const why = v.paused ? "paused" : !v.isConnected ? "detached" : v.closest(SKIP) ? "skip" : !v.videoWidth ? "no videoWidth" : document.hidden ? "tab hidden" : "";
+  if (why) return console.log("[GTA OCR] skipped:", why);
+  ocrQueue = ocrQueue.then(async () => {
+    try {
+      await chrome.runtime.sendMessage({ type: "gta-ocr-ensure" });
+      const r = await chrome.runtime.sendMessage({ type: "gta-ocr", img: grabFrame(v) });
+      console.log("[GTA OCR]", r?.error || r?.text?.trim());
+      if (r?.text && RE.test(r.text)) {
+        const c = containerFor(v);
+        if (c && !c.dataset.gtaHidden) { block(c); v.pause(); }
+        return;
+      }
+    } catch (e) { console.log("[GTA OCR] error", String(e)); return; }
+    if (n + 1 < OCR_MAX) ocrTimers.set(v, setTimeout(() => { ocrTimers.delete(v); ocrVideo(v, n + 1); }, OCR_EVERY_MS));
+  });
+}
+console.log("[GTA OCR] content script loaded");
+document.addEventListener("playing", (e) => {
+  const v = e.target;
+  if (v.tagName !== "VIDEO" || ocrTimers.has(v)) return;
+  console.log("[GTA OCR] video playing, waiting", OCR_AFTER_MS, "ms");
+  ocrTimers.set(v, setTimeout(() => { ocrTimers.delete(v); ocrVideo(v); }, OCR_AFTER_MS));
+}, true);
+["pause", "emptied", "ended"].forEach((ev) =>
+  document.addEventListener(ev, (e) => { clearTimeout(ocrTimers.get(e.target)); ocrTimers.delete(e.target); }, true));
 
 // Pages that load content dynamically (YouTube, X, Facebook...)
 let timer;
