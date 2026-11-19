@@ -3,16 +3,43 @@
   "name": "GTA VI Warning",
   "version": "1.3",
   "description": "Ostrzega, gdy strona wspomina o GTA VI.",
-  "permissions": ["offscreen"],
-  "background": { "service_worker": "background.js" },
+  "permissions": [
+    "offscreen"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["content.js"],
-      "run_at": "document_idle"
+      "matches": [
+        "*://www.google.com/*",
+        "*://www.google.pl/*",
+        "*://*.facebook.com/*",
+        "*://*.instagram.com/*",
+        "*://x.com/*",
+        "*://twitter.com/*",
+        "*://*.youtube.com/*",
+        "*://*.reddit.com/*",
+        "*://*.tiktok.com/*",
+        "*://*.threads.net/*",
+        "*://*.threads.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle",
+      "exclude_matches": [
+        "*://*.facebook.com/messages/*",
+        "*://*.facebook.com/t/*",
+        "*://*.instagram.com/direct/*",
+        "*://x.com/messages/*",
+        "*://twitter.com/messages/*"
+      ]
     }
   ],
   "browser_specific_settings": {
-    "gecko": { "id": "gta-warning@example.com" }
+    "gecko": {
+      "id": "gta-warning@example.com"
+    }
   }
 }

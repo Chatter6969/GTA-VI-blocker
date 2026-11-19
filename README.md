@@ -19,6 +19,10 @@ The extension checks the page text for any of these (case-insensitive):
 
 - Any standalone `GTA` or `#GTA`, except `GTA V`, `GTA 5`, `GTA IV`, `GTA 4` Pages that load content dynamically are re-checked as new content appears.
 
+## Where it works
+
+Only on Google (search and images), Facebook, Instagram, X, YouTube, Reddit, TikTok and Threads. Messengers and chats (WhatsApp Web, Messenger, Instagram DMs, X messages) are not touched. To add a site, add its address to `matches` in `manifest.json`.
+
 ## Installation
 
 Download or clone this repository first:

@@ -11,7 +11,8 @@ const CONTAINER = [
   ".post", ".comment", "li",
 ].join(",");
 
-const SKIP = "script,style,noscript,textarea,[data-gta-notice],[data-gta-hidden],[data-gta-ok]";
+// data-mw-file-dropzone / data-scope=messages_table = Messenger chat window (also the popups on facebook.com)
+const SKIP = "script,style,noscript,textarea,[data-gta-notice],[data-gta-hidden],[data-gta-ok],[data-mw-file-dropzone],[data-scope='messages_table']";
 
 function containerFor(el) {
   let c = el.closest(CONTAINER);
