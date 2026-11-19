@@ -34,6 +34,8 @@ function containerFor(el) {
     if (best) c = best;
   }
   if (!c || c === document.body || c === document.documentElement || c.tagName === "MAIN") return null;
+  // Never block a page-level wrapper (it would hide, then after "Open anyway" un-scan, the whole site)
+  if (c.querySelector("[role='main'],[role='banner'],[role='navigation'],[role='feed']") || c.querySelectorAll("[role='article']").length > 1) return null;
   return c;
 }
 
