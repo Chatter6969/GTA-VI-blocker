@@ -6,6 +6,11 @@
   "permissions": [
     "offscreen"
   ],
+  "host_permissions": [
+    "*://*.fbcdn.net/*", "*://*.twimg.com/*", "*://*.cdninstagram.com/*", "*://*.ytimg.com/*",
+    "*://*.redd.it/*", "*://*.redditmedia.com/*", "*://*.gstatic.com/*", "*://*.googleusercontent.com/*",
+    "*://*.tiktokcdn.com/*", "*://*.tiktokcdn-eu.com/*"
+  ],
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
   },

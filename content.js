@@ -136,14 +136,39 @@ function ocrVideo(v) {
       const img = grabFrame(v);
       await chrome.runtime.sendMessage({ type: "gta-ocr-ensure" });
       const r = await chrome.runtime.sendMessage({ type: "gta-ocr", img });
-      console.log("[GTA OCR]", r?.error || JSON.stringify(r?.text?.trim()));
-      if (r?.text && OCR_RE.test(r.text)) {
-        const c = containerFor(v);
-        if (c && !c.dataset.gtaHidden) { block(c); v.pause(); }
-      }
+      ocrResult(v, r);
     } catch (e) { console.log("[GTA OCR] error", String(e)); }
   });
 }
+function ocrResult(el, r) {
+  console.log("[GTA OCR]", r?.error || JSON.stringify(r?.text?.trim()));
+  if (r?.text && OCR_RE.test(r.text)) {
+    const c = containerFor(el);
+    if (c && !c.dataset.gtaHidden) { block(c); el.pause?.(); }
+  }
+}
+// Images: the offscreen document re-reads the picture from the browser cache (canvas is tainted for CDN images)
+const seenImg = new Set();
+let imgBudget = 60; // ponytail: max 60 images per page load, raise if feeds need more
+function ocrImages() {
+  if (document.hidden) return;
+  for (const img of document.images) {
+    const src = img.currentSrc;
+    if (!src || seenImg.has(src) || !img.complete || img.closest(SKIP)) continue;
+    const r = img.getBoundingClientRect();
+    if (r.width < 200 || r.height < 120 || r.bottom < 0 || r.top > innerHeight) continue;
+    if (imgBudget-- <= 0) return;
+    seenImg.add(src);
+    ocrQueue = ocrQueue.then(async () => {
+      try {
+        if (!img.isConnected || img.closest("[data-gta-hidden]")) return;
+        await chrome.runtime.sendMessage({ type: "gta-ocr-ensure" });
+        ocrResult(img, await chrome.runtime.sendMessage({ type: "gta-ocr-url", url: src }));
+      } catch (e) { console.log("[GTA OCR] error", String(e)); }
+    });
+  }
+}
+setInterval(ocrImages, 1000);
 console.log("[GTA OCR] content script loaded (polling v3)");
 // Polling instead of play/pause events: Facebook's player fires them constantly and cancelled the timers
 setInterval(() => {
