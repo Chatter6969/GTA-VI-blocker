@@ -1,4 +1,4 @@
-const RE = /(GTA|Grand Theft Auto)\s*(VI|6)\b/i;
+const RE = /(GTA|Grand Theft Auto)\s*(VI|6)\b|\b(Jason|Lucia|Vice City|Leonida)\b/i;
 
 // Smallest "unit of content" around a match: post, search result, comment, list item...
 const CONTAINER = [
@@ -6,6 +6,7 @@ const CONTAINER = [
   ".MjjYud", "div.g",                                   // Google results
   "ytd-video-renderer", "ytd-rich-item-renderer", "ytd-comment-thread-renderer",
   "[data-testid='tweet']", "shreddit-post", "shreddit-comment",
+  "a[href*='/reel/']", "a[href*='/videos/']",           // FB reel/video preview cards
   ".post", ".comment", "li",
 ].join(",");
 

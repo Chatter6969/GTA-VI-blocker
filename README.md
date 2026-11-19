@@ -15,7 +15,9 @@ The extension checks the page text for any of these (case-insensitive):
 - `GTA VI`, `GTA 6`, `GTA6`
 - `Grand Theft Auto VI`, `Grand Theft Auto 6`
 
-Other titles such as `GTA V` or `GTA Vice City` do not trigger it. Pages that load content dynamically are re-checked as new content appears.
+- `Jason`, `Lucia`, `Vice City`, `Leonida` (characters and places from the game, so expect some false positives)
+
+`GTA V` alone does not trigger it. Pages that load content dynamically are re-checked as new content appears.
 
 ## Installation
 
