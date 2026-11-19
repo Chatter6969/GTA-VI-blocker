@@ -1,4 +1,5 @@
-const RE = /(GTA|Grand Theft Auto)\s*(VI|6)\b|\b(Jason|Lucia|Vice City|Leonida)\b/i;
+// Any standalone "GTA"/"#GTA" except GTA V / GTA 5 / GTA IV / GTA 4, plus GTA VI / 6 and game names
+const RE = /\bGTA\b(?!\s*(V|5|IV|4)\b)|(GTA|Grand Theft Auto)\s*(VI|6)\b|\b(Jason|Lucia|Vice City|Leonida)\b/i;
 
 // Smallest "unit of content" around a match: post, search result, comment, list item...
 const CONTAINER = [
@@ -6,7 +7,7 @@ const CONTAINER = [
   ".MjjYud", "div.g",                                   // Google results
   "ytd-video-renderer", "ytd-rich-item-renderer", "ytd-comment-thread-renderer",
   "[data-testid='tweet']", "shreddit-post", "shreddit-comment",
-  "a[href*='/reel/']", "a[href*='/videos/']",           // FB reel/video preview cards
+  "a[href*='/reel/']:not([href*='/hashtag/'])", "a[href*='/videos/']", // FB reel/video preview cards (not hashtag links)
   ".post", ".comment", "li",
 ].join(",");
 
@@ -17,13 +18,19 @@ function containerFor(el) {
   // No post-like wrapper: fall back to the nearest block (paragraph) so we never nuke the page
   if (!c) {
     c = el.closest("p,blockquote,section,div");
-    // Reels/video players: climb to the nearest ancestor holding exactly one <video>
-    let p = c;
-    for (let i = 0; p && i < 12 && p !== document.body && p.tagName !== "MAIN"; i++, p = p.parentElement) {
-      const n = p.querySelectorAll("video").length;
-      if (n > 1) break;
-      if (n === 1) { c = p; break; }
+    // Posts without role=article: climb to the post root = the highest ancestor that still holds
+    // the same media (video / big image) and no more, and is shorter than the feed
+    const media = (p) => [...p.querySelectorAll("video,img")].filter((m) => m.tagName === "VIDEO" || m.clientWidth >= 150).length;
+    let p = c, base = 0, best = null;
+    for (let i = 0; p && i < 40 && p !== document.body && p.tagName !== "MAIN"; i++, p = p.parentElement) {
+      if (p.getBoundingClientRect().height > innerHeight * 1.2) break; // that's the feed, not a post
+      const n = media(p);
+      if (n > 4) break;
+      if (!base) { if (n) { base = n; best = p; } }
+      else if (n === base) best = p;
+      else break;
     }
+    if (best) c = best;
   }
   if (!c || c === document.body || c === document.documentElement || c.tagName === "MAIN") return null;
   return c;
@@ -32,18 +39,29 @@ function containerFor(el) {
 function block(el) {
   el.dataset.gtaHidden = "1";
   const display = el.style.display;
+  // Videos/reels: keep the original size and show a tile; everything else: a thin inline note
+  const r = el.getBoundingClientRect();
+  const tile = (el.matches("[role='gridcell'],a[href*='/reel/']:not([href*='/hashtag/'])") || el.querySelector("video")) && r.width >= 100 && r.height >= 150;
   el.style.setProperty("display", "none", "important");
 
   const notice = document.createElement("div");
   notice.dataset.gtaNotice = "1";
-  notice.style.cssText =
-    "font:13px/1.4 sans-serif;color:#888;padding:6px 10px;margin:4px 0;border-left:3px solid #d00;";
-  notice.append("GTA VI content ");
-
   const link = document.createElement("a");
   link.href = "#";
   link.textContent = "Open anyway";
-  link.style.cssText = "color:#d00;margin-left:6px;cursor:pointer;";
+  if (tile) {
+    notice.style.cssText =
+      `box-sizing:border-box;width:${r.width}px;height:${r.height}px;flex:none;display:flex;flex-direction:column;` +
+      "align-items:center;justify-content:center;gap:10px;border-radius:12px;border:1px solid rgba(128,128,128,.4);" +
+      "background:rgba(128,128,128,.15);font:600 16px/1.3 sans-serif;color:#999;text-align:center;";
+    notice.append("🎮 GTA VI content");
+    link.style.cssText = "font:13px sans-serif;color:#d00;cursor:pointer;";
+  } else {
+    notice.style.cssText =
+      "font:13px/1.4 sans-serif;color:#888;padding:6px 10px;margin:4px 0;border-left:3px solid #d00;";
+    notice.append("GTA VI content ");
+    link.style.cssText = "color:#d00;margin-left:6px;cursor:pointer;";
+  }
   link.addEventListener("click", (e) => {
     e.preventDefault();
     e.stopPropagation();
